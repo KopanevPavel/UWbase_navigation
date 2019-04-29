@@ -1,0 +1,166 @@
+<launch>
+
+    <!-- TODO: Decompose -->
+
+    <!-- Sets mode: qualification, missions, demo or none -->
+    <arg name="mode" default="missions" />
+
+    <!-- Sets mode for drums mission: left, right, middle or none -->
+    <arg name="drum_mission_direction_mode" default="right" />
+
+    <!-- Sets distance to horizontal mat edge for drums mission -->
+    <arg name="drum_mission_horizontal_edge_distance" default="-200" />
+
+    <!-- Disables connection with STM32 -->
+    <arg name="connectionDisabled" default="true" />
+
+    <!-- Disables cameras -->
+    <arg name="camerasDisabled" default="true" />
+
+    <!-- Enables video streaming through network -->
+    <arg name="stream" default="false" />
+
+    <!-- Enables simulation mode (for simple simulator) -->
+    <arg name="simulation" default="true" />
+
+    <!-- Enables GUI windows for debugging vision nodes -->
+    <arg name="debugVision" default="true" />
+
+    <!-- Enables video recording. Use 'storage' parameter to specify recorded video location. -->
+    <arg name="record" default="false" />
+
+    <!-- Root path for all output videos and images. MUST NOT END WITH SLASH!!!!!! -->
+    <arg name="storage" />
+
+    <!-- Reset IMU after start -->
+    <arg name="imuReset" default="true" />
+
+    <node pkg="auv_vision" name="gate_locator" type="gate_locator" output="screen">
+        <remap from="/cam_front_1/image_raw" to="/stereo/camera/right/image_raw" if="$(arg simulation)" />
+        <param name="detectorMode" value="angle" />
+        <param name="horizontalToVerticalRelation" value="1.0" />
+        <param name="debugVision" value="$(arg debugVision)" />
+    </node>
+
+    <!--node pkg="auv_vision" name="drums_locator" type="drums_locator" output="screen">
+        <remap from="/cam_front_1/image_raw" to="/stereo/camera/right/image_raw" if="$(arg simulation)" />
+        <remap from="/cam_bottom/image_raw" to="/ROV_model_URDF/camera_bottom/image_raw" if="$(arg simulation)" />
+        <param name="debugVision" value="$(arg debugVision)" />
+    </node-->
+
+    <node pkg="auv_vision" name="base_locator" type="base_locator" output="screen">
+        <remap from="/cam_front_1/image_raw" to="/stereo/camera/right/image_raw" if="$(arg simulation)" />
+        <remap from="/cam_bottom/image_raw" to="/ROV_model_URDF/camera_bottom/image_raw" if="$(arg simulation)" />
+        <param name="debugVision" value="$(arg debugVision)" />
+    </node>
+
+    <!--node pkg="auv_pilot" name="pilot" type="pilot" output="screen">
+        <param name="simulation" value="$(arg simulation)" />
+        <param name="velocityLevel1" value="5000.0" />
+        <param name="velocityLevel2" value="10000.0" />
+        <param name="velocityLevel3" value="15000.0" />
+        <param name="velocityLevel4" value="20000.0" />
+        <param name="diveTime" value="5.0" />
+    </node-->
+
+    <group if="$(arg simulation)">
+        <node pkg="auv_connection" name="gazebo_bridge" type="gazebo_bridge" output="screen" />
+    </group>
+
+
+    <!--node pkg="auv_pilot" name="TimerServer" type="TimerServer" output="screen" /-->
+
+
+    <group unless="$(arg simulation)">
+
+        <group unless="$(arg connectionDisabled)">
+            <node pkg="auv_connection" name="uart_bridge" type="uart_bridge" output="screen" respawn="true" >
+                <param name="device" value="/dev/ttyS0" />
+                <param name="baudrate" value="57600" />
+                <param name="dataBytes" value="8" />
+                <param name="parity" value="none" />
+                <param name="stopBits" value="1" />
+            </node>
+            <node pkg="auv_connection" name="hardware_bridge" type="hardware_bridge" output="screen" respawn="true" />
+        </group>
+
+        <group unless="$(arg camerasDisabled)">
+
+            <!-- First front camera -->
+            <node name="cam_front_1" pkg="usb_cam" type="usb_cam_node" output="screen" respawn="true" >
+                <param name="video_device" value="/dev/v4l/by-id/usb-3.0_USB_Camera_3.0_USB_Camera-video-index0" />
+                <param name="image_width" value="640" />
+                <param name="image_height" value="480" />
+                <param name="pixel_format" value="yuyv" />
+                <param name="framerate" value="30" />
+                <param name="camera_frame_id" value="cam_front_1" />
+                <param name="camera_name" value="cam_front_1" />
+                <param name="io_method" value="mmap"/>
+            </node>
+
+             <!-- Bottom camera -->
+             <!--
+            <node name="cam_bottom" pkg="usb_cam" type="usb_cam_node" output="screen" respawn="true" >
+                <param name="video_device" value="/dev/v4l/by-id/usb-Sonix_Technology_Co.__Ltd._H264_USB_Camera_SN0001-video-index0" />
+                <param name="image_width" value="640" />
+                <param name="image_height" value="480" />
+                <param name="pixel_format" value="yuyv" />
+                <param name="framerate" value="30" />
+                <param name="camera_frame_id" value="cam_bottom" />
+                <param name="camera_name" value="cam_bottom" />
+                <param name="io_method" value="mmap"/>
+            </node>
+            -->
+
+        </group>
+
+        <!--TODO: Allow to record in simulation mode -->
+        <group if="$(arg record)">
+            <!-- First front camera recorder -->
+            <!-- FPS in recorders are mostly empiric values! -->
+            <node name="front_recorder_1" pkg="auv_vision" type="video_recorder" output="screen">
+                <remap from="image" to="/cam_front_1/image_raw"/>
+                <param name="fps" value="30" />
+                <param name="codec" value="H264" />
+                <param name="filename" value="$front-1.avi" />
+            </node>
+
+            <!-- Bottom camera recorder
+            <node name="bottom_recorder" pkg="auv_vision" type="video_recorder" output="screen">
+                <remap from="image" to="/cam_bottom/image_raw"/>
+                <param name="fps" value="30" />
+                <param name="codec" value="H264" />
+                <param name="filename" value="bottom.avi" />
+            </node>
+            -->
+        </group>
+
+    </group>
+
+    <group if="$(arg stream)">
+        <!-- Video web server -->
+        <node name="video_server" pkg="web_video_server" type="web_video_server" output="screen" >
+            <param name="server_threads" value="4" />
+            <param name="ros_threads" value="10" />
+        </node>
+    </group>
+
+    <!--node pkg="auv_pilot" name="top_level_fsm" type="top_level_fsm.py" output="screen">
+        
+        <param name="mode" value="$(arg mode)" />
+        <param name="diveDelay" value="5" />
+        <param name="initialDepth" value="40" />
+        <param name="imuReset" value="$(arg imuReset)" />
+        
+        <param name="qualificationDuration" value="20" /--> <!-- March move duration in seconds -->
+        
+        <!--param name="gateFsmMode" value="simple" />
+        <param name="drumsEnabled" value="true" />
+        <param name="lagDirection" value="LEFT" />
+
+        <param name="drum_mission_direction_mode" value="$(arg drum_mission_direction_mode)" />
+
+    </node-->
+
+
+</launch>

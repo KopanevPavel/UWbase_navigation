@@ -1,0 +1,8 @@
+# Goal
+int32 depth # Depth in centimetres
+---
+# Result
+int32 totalDepth
+---
+# Feedback
+int32 currentDepth

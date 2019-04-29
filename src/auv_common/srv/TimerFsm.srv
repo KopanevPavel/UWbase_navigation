@@ -1,0 +1,6 @@
+# Request
+bool start # Start timer
+---
+# Response
+uint64 duration
+
